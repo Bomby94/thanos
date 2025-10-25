@@ -1,0 +1,76 @@
+version: "3.9"
+name: thanos
+
+# 🧩 Load variables automatically from .env in the same directory
+# (Compose does this by default, so no need for an explicit env_file at the root level)
+
+services:
+  traefik:
+    image: traefik:v3.1
+    container_name: traefik
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+    networks:
+      - traefik-net
+
+  mariadb:
+    image: mariadb:10.11
+    container_name: mariadb
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: "${MYSQL_ROOT_PASSWORD}"
+      MYSQL_DATABASE: "${MYSQL_DATABASE}"
+      MYSQL_USER: "${MYSQL_USER}"
+      MYSQL_PASSWORD: "${MYSQL_PASSWORD}"
+    volumes:
+      - mariadb-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - backend
+
+  infinity-php:
+    build:
+      context: ../../apps/infinity
+      dockerfile: Dockerfile
+      target: prod
+      args:
+        UID: "${UID}"
+        GID: "${GID}"
+    image: monorepo/php-service:${APP_ENV}
+    container_name: infinity-php
+    restart: unless-stopped
+    expose:
+      - "8000"
+    environment:
+      DATABASE_URL: "mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mariadb:3306/${MYSQL_DATABASE}"
+      APP_ENV: "${APP_ENV}"
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.infinity.rule=Host(`infinity.thanos.local`)"
+      - "traefik.http.services.infinity.loadbalancer.server.port=8000"
+      - "traefik.docker.network=thanos_traefik-net"
+    networks:
+      - traefik-net
+      - backend
+
+networks:
+  traefik-net:
+    driver: bridge
+  backend:
+    driver: bridge
+
+volumes:
+  mariadb-data:

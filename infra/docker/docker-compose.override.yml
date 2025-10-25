@@ -1,0 +1,21 @@
+services:
+
+
+  infinity-php:
+    build:
+      context: ../../apps/infinity
+      dockerfile: Dockerfile
+      target: dev
+    image: monorepo/php-service:dev
+    environment:
+      APP_ENV: dev
+      SYMFONY_DEPRECATIONS_HELPER: disabled
+      GIT_SSH_COMMAND: "ssh -i /root/.ssh/id_rsa -o StrictHostKeyChecking=no"
+    volumes:
+      - ../../apps/infinity:/srv/app:delegated
+      - ../../apps/infinity/var:/srv/app/var
+      # 🧩 SSH keys & Git config sharing
+      - ~/.ssh:/home/appuser/.ssh:ro
+      - ~/.gitconfig:/home/appuser/.gitconfig:ro
+      - ~/.git-credentials:/home/appuser/.git-credentials:ro
+    command: php -S 0.0.0.0:8000 -t public

@@ -1,0 +1,7 @@
+http:
+  routers:
+    dashboard:
+      rule: "Host(`traefik.thanos.local`)"
+      service: api@internal
+      entryPoints:
+        - web
