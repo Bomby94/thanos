@@ -66,6 +66,143 @@ services:
       - traefik-net
       - backend
 
+  mongodb:
+    image: mongo:7.0
+    container_name: mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: "${MONGO_INITDB_ROOT_USERNAME}"
+      MONGO_INITDB_ROOT_PASSWORD: "${MONGO_INITDB_ROOT_PASSWORD}"
+      MONGO_INITDB_DATABASE: "${MONGO_INITDB_DATABASE}"
+    volumes:
+      - mongodb-data:/data/db
+    ports:
+      - "27017:27017" # optional, only needed for direct access
+    networks:
+      - backend
+
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.1
+    container_name: elasticsearch
+    expose:
+      - "9200"
+    environment:
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms512m -Xmx512m
+      - xpack.security.enabled=false
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+    volumes:
+      - elasticsearch-data:/usr/share/elasticsearch/data
+    ports:
+      - "9200:9200" # optional for direct access
+    networks:
+      - backend
+
+  kibana:
+    image: docker.elastic.co/kibana/kibana:8.11.1
+    container_name: kibana
+    expose:
+      - "5601"
+    environment:
+      ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.kibana.rule=Host(`kibana.thanos.local`)"
+      - "traefik.http.services.kibana.loadbalancer.server.port=5601"
+      - "traefik.docker.network=thanos_traefik-net"
+    networks:
+      - traefik-net
+      - backend
+
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    hostname: redis
+    profiles: ["redis"]
+    command: [ "redis-server", "/usr/local/etc/redis/redis.conf" ]
+    healthcheck:
+      test: [ "CMD", "redis-cli", "ping" ]
+      interval: 5s
+      retries: 5
+      timeout: 5s
+    volumes:
+      - ./redis/redis.conf:/usr/local/etc/redis/redis.conf
+    ports:
+      - "6379:6379"
+    expose:
+      - "6379"
+    networks:
+      - backend
+
+
+  redis-replica:
+    image: redis:7-alpine
+    container_name: redis-replica
+    profiles: ["redis"]
+    depends_on:
+      - redis
+    command: [ "redis-server", "/usr/local/etc/redis/redis.slave.conf" ]
+    volumes:
+      - ./redis/redis.slave.conf:/usr/local/etc/redis/redis.slave.conf
+    expose:
+      - "6379"
+    networks:
+      - backend
+
+  redis-sentinel-1:
+    build:
+      context: .
+      dockerfile: ./redis/sentinel/Dockerfile
+    container_name: redis-sentinel-1
+    profiles: ["redis"]
+    command: >
+      sh -c "until redis-cli -h redis ping; do echo waiting for redis; sleep 1; done; redis-sentinel /usr/local/etc/redis/redis.sentinel1.conf"
+    ports:
+      - "26379:26379"
+    expose:
+      - "26379"
+    networks:
+      - backend
+    depends_on:
+      - redis
+
+  redis-sentinel-2:
+    build:
+      context: .
+      dockerfile: ./redis/sentinel/Dockerfile
+    container_name: redis-sentinel-2
+    profiles: ["redis"]
+    command: >
+      sh -c "until redis-cli -h redis ping; do echo waiting for redis; sleep 1; done; redis-sentinel /usr/local/etc/redis/redis.sentinel2.conf"
+    ports:
+      - "26380:26380"
+    expose:
+      - "26380"
+    networks:
+      - backend
+    depends_on:
+      - redis
+
+  redis-sentinel-3:
+    build:
+      context: .
+      dockerfile: ./redis/sentinel/Dockerfile
+    container_name: redis-sentinel-3
+    profiles: ["redis"]
+    command: >
+      sh -c "until redis-cli -h redis ping; do echo waiting for redis; sleep 1; done; redis-sentinel /usr/local/etc/redis/redis.sentinel3.conf"
+    ports:
+      - "26381:26381"
+    expose:
+      - "26381"
+    networks:
+      - backend
+    depends_on:
+      - redis
+
 networks:
   traefik-net:
     driver: bridge
@@ -74,3 +211,5 @@ networks:
 
 volumes:
   mariadb-data:
+  mongodb-data:
+  elasticsearch-data:
