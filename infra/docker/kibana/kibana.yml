@@ -1,0 +1,8 @@
+# Kibana configuration (YAML)
+# Note: keys use YAML syntax with a colon, not key=value.
+
+# Public URL Kibana is accessed at behind Traefik
+server.publicBaseUrl: "http://kibana.thanos.local"
+
+# Match Elasticsearch security (ES in compose has xpack.security.enabled=false)
+xpack.security.enabled: false

@@ -3,8 +3,6 @@ services:
 
   infinity-php:
     build:
-      context: ../../apps/infinity
-      dockerfile: Dockerfile
       target: dev
     image: monorepo/php-service:dev
     environment:
@@ -14,8 +12,15 @@ services:
     volumes:
       - ../../apps/infinity:/srv/app:delegated
       - ../../apps/infinity/var:/srv/app/var
+      - ../../data/debug:/home/appuser/debug
       # 🧩 SSH keys & Git config sharing
       - ~/.ssh:/home/appuser/.ssh:ro
       - ~/.gitconfig:/home/appuser/.gitconfig:ro
       - ~/.git-credentials:/home/appuser/.git-credentials:ro
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: otel-collector:24224
+        tag: "{{.Name}}/{{.ID}}"
+        fluentd-async: "true"
     command: php -S 0.0.0.0:8000 -t public

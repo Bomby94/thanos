@@ -41,7 +41,7 @@ services:
   infinity-php:
     build:
       context: ../../apps/infinity
-      dockerfile: Dockerfile
+      dockerfile: docker/Dockerfile
       target: prod
       args:
         UID: "${UID}"
@@ -57,11 +57,21 @@ services:
     depends_on:
       mariadb:
         condition: service_healthy
+    volumes:
+      - ../../apps/infinity/docker/php.ini:/usr/local/etc/php/conf.d/php.ini
+    logging:
+      driver: fluentd
+      options:
+        fluentd-address: otel-collector:24224
+        tag: "{{.Name}}/{{.ID}}"
+        fluentd-async: "true"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.infinity.rule=Host(`infinity.thanos.local`)"
       - "traefik.http.services.infinity.loadbalancer.server.port=8000"
       - "traefik.docker.network=thanos_traefik-net"
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     networks:
       - traefik-net
       - backend
@@ -108,6 +118,9 @@ services:
       - "5601"
     environment:
       ELASTICSEARCH_HOSTS: "http://elasticsearch:9200"
+      XPACK_ENCRYPTEDSAVEDOBJECTS_ENCRYPTIONKEY: "${KIBANA_ENCRYPTION_KEY}"
+    volumes:
+      - kibana-data:/usr/share/kibana/data
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.kibana.rule=Host(`kibana.thanos.local`)"
@@ -116,6 +129,24 @@ services:
     networks:
       - traefik-net
       - backend
+
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.112.0
+    container_name: otel-collector
+    command: [ "--config", "/etc/otel/config.yaml" ]
+    volumes:
+      - ./otel/otel-config.yaml:/etc/otel/config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC
+      - "4318:4318"   # OTLP HTTP
+      - "24224:24224" # Fluentd forward
+    expose:
+      - "4317"   # OTLP gRPC
+      - "4318"   # OTLP HTTP
+    networks:
+      - backend
+    depends_on:
+      - elasticsearch
 
   redis:
     image: redis:7-alpine
@@ -213,3 +244,4 @@ volumes:
   mariadb-data:
   mongodb-data:
   elasticsearch-data:
+  kibana-data:

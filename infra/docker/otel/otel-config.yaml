@@ -1,0 +1,43 @@
+receivers:
+  # Receive traces via OTLP from instrumented services (keep for traces)
+  otlp:
+    protocols:
+      grpc:
+      http:
+
+  # Receive logs via Fluent Forward (Fluentd/Fluent Bit)
+  fluentforward:
+    endpoint: 0.0.0.0:24224
+
+processors:
+  filter/drop_non_json:
+    logs:
+      log_record:
+        - 'IsString(body) and not IsMatch(body, "^[\\{\\[]")'
+
+  transform/parse_json_to_attrs:
+    log_statements:
+      - context: log
+        statements:
+          - 'merge_maps(attributes, ParseJSON(body), "upsert") where IsString(body) and IsMatch(body, "^[\\{\\[]")'
+          - 'set(body, ParseJSON(body)) where IsString(body) and IsMatch(body, "^[\\{\\[]")'
+
+
+exporters:
+  elasticsearch:
+    endpoints: ["http://elasticsearch:9200"]
+    logs_index: "otel-logs"
+    traces_index: "otel-traces"
+
+  debug:
+    verbosity: normal
+
+service:
+  pipelines:
+    logs:
+      receivers: [fluentforward]
+      processors: [filter/drop_non_json, transform/parse_json_to_attrs]
+      exporters: [elasticsearch, debug]
+    traces:
+      receivers: [otlp]
+      exporters: [elasticsearch, debug]
