@@ -20,7 +20,6 @@ services:
     logging:
       driver: fluentd
       options:
-        fluentd-address: otel-collector:24224
-        tag: "{{.Name}}/{{.ID}}"
-        fluentd-async: "true"
+        fluentd-address: 127.0.0.1:24224
+        fluentd-async-connect: "true"
     command: php -S 0.0.0.0:8000 -t public

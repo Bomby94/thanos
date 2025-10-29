@@ -64,7 +64,7 @@ services:
       options:
         fluentd-address: otel-collector:24224
         tag: "{{.Name}}/{{.ID}}"
-        fluentd-async: "true"
+#        fluentd-async: "true"
     labels:
       - "traefik.enable=true"
       - "traefik.http.routers.infinity.rule=Host(`infinity.thanos.local`)"
@@ -143,6 +143,7 @@ services:
     expose:
       - "4317"   # OTLP gRPC
       - "4318"   # OTLP HTTP
+      - "24224"   # Fluentd forward
     networks:
       - backend
     depends_on:
